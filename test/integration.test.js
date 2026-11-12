@@ -10,7 +10,7 @@
  * back in the receipt only when they carry a value.
  */
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -287,6 +287,28 @@ function makeCtx(options = {}) {
   assert.equal(head.status, 200)
   assert.equal(await head.text(), '')
   assert.equal((await routes[0].resource({ method: 'POST' })).status, 405)
+}
+
+// ── boot trail：超过上限按行轮转，不再无限增长 ─────────────────────────────
+{
+  assert.equal(existsSync(path.join(fakeHome, 'dsh-visual-reply/boot-trail.jsonl')), true, '启动痕迹应已写入')
+  const dir = path.join(fakeHome, 'dsh-visual-reply')
+  const file = path.join(dir, 'boot-trail.jsonl')
+  mkdirSync(dir, { recursive: true })
+  const filler = Array.from({ length: 9000 }, (_, index) => JSON.stringify({ at: 'old', stage: 'boot', index })).join('\n')
+  writeFileSync(file, `${filler}\n`, 'utf8')
+  const before = statSync(file).size
+  assert.equal(before > 256 * 1024, true, '先造一份超过上限的痕迹')
+
+  const { ctx } = makeCtx()
+  await apply(ctx, { enabled: false, dshHome: fakeHome })
+
+  const after = statSync(file).size
+  const lines = readFileSync(file, 'utf8').trim().split('\n')
+  assert.equal(after < before, true, '超过上限应轮转')
+  assert.equal(after <= 256 * 1024 + 4096, true, '轮转后回到上限以内')
+  assert.equal(lines.length <= 201, true, '只保留最近 200 行再加本次一行')
+  assert.equal(JSON.parse(lines.at(-1)).stage, 'apply', '本次启动仍然记了一行')
 }
 
 rmSync(fakeHome, { recursive: true, force: true })
