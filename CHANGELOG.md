@@ -3,6 +3,25 @@
 All notable changes to `dsh-visual-reply`. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- PNG/PDF exports are the composed card, not the bare iframe content: the
+  conclusion title, the figure and the provenance line are re-drawn on the
+  current theme surface at 2x before download/clipboard.
+- `⋯ → Download PDF`: a hand-built single-page PDF wrapping that composed
+  image as JPEG (no dependency, no network, one page).
+- HTML/table fragments can be exported at all: when the frame has no canvas or
+  SVG, the runtime serializes the body into an SVG `foreignObject`, rasterizes
+  it and returns a PNG — previously the action failed with "nothing to export".
+
+### Fixed
+
+- Copying or downloading an image used to drop the title and provenance, so the
+  exported file read as an orphan chart.
+- `sample: true` no longer prepends "示例数据" when the caption already says it.
+
 ## [0.2.1] — 2026-11-12
 
 ### Fixed
