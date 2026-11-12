@@ -18,7 +18,7 @@
 #                       ['cdn.jsdelivr.net']   — a fallback only: ECharts ships
 #                       locally (assets/echarts.min.js) and is injected inline,
 #                       so figures never touch the network.
-#   archive:          false    write a copy of each visual to $DSH_HOME/visual-reply/
+#   archive:          false    write a copy of each visual to $DSH_HOME/dsh-visual-reply/
 #   injectPrompt:      true    add the "when to draw" section to the system prompt
 - insert:
     - id: visual-reply

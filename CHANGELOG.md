@@ -3,6 +3,31 @@
 All notable changes to `dsh-visual-reply`. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Short figures no longer sit in a 240px box: after the first height report the
+  iframe follows the measured content (24px anti-collapse floor) instead of
+  `min`-clamping to 240px, which left ~130px of dead space under a three-row
+  table.
+- The inline-SVG template is drawn at the card's real width (`viewBox` 720×300)
+  instead of a 360px canvas stretched by `width="100%"`. A narrow canvas scaled
+  every font size, stroke and padding by ~2x, which read as "the figure has
+  margins". The prompt now states the rule and the validator warns (advisory)
+  when a `viewBox` narrower than 480px is stretched.
+- Activating the plugin no longer overwrites a hand-edited
+  `$DSH_HOME/skills/visual-reply/SKILL.md`: the installer compares the on-disk
+  copy with its own ledger and leaves foreign content alone (with a warning),
+  while still upgrading copies it installed itself.
+- `boot-trail.jsonl` rotates at 256 KiB, keeping the most recent 200 lines,
+  instead of growing for the life of the profile.
+- `docs/demo.html` is generated from `lib/srcdoc.js` and pinned by a test, so it
+  carries the current CSP, design tokens and height runtime instead of the 0.1
+  layout.
+- Comments pointed `archive` output at `$DSH_HOME/visual-reply/`; the actual
+  directory is `$DSH_HOME/dsh-visual-reply/`.
+
 ## [0.2.0] — 2026-11-12
 
 First public release.

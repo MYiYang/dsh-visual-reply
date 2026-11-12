@@ -9,10 +9,11 @@ This is a reconstruction of the "text + figure" analysis replies seen in WorkBud
 | Side | File | Role |
 | --- | --- | --- |
 | Host | `index.js` | Registers the `visual_render` tool (9 parameters), a system-prompt section, and the bundled skill |
-| Host | `lib/validate.js` | Pure policy: size, document structure, escaping APIs, script allowlist, map red line, plus 8 design-quality lint rules (warnings only) |
+| Host | `lib/validate.js` | Pure policy: size, document structure, escaping APIs, script allowlist, map red line, plus 9 design-quality lint rules (warnings only) |
 | Host | `lib/prompt.js` | "When to draw / how to draw" prompt: design tokens, axes and units, category caps, provenance fields |
 | Client | `client.js` | One shared `<Figure>` behind `tool.call.toolview` and `conversation.chat.turnTail`: sandboxed iframe, hover actions, fullscreen, live theme, explicit failure states |
 | Skill | `skills/visual-reply/SKILL.md` | When to draw, chart choice, tokens/templates, self-check |
+| Docs | `docs/demo.html` | Generated from `lib/srcdoc.js` by `scripts/build-demo.mjs`: the exact sandbox document, for offline preview |
 
 ## Install
 
@@ -54,8 +55,8 @@ Then refresh the Web UI once so the client half loads.
 - ECharts ships inside the client bundle (gzip+base64, ~335 KB): decoded at render time via `DecompressionStream`, inlined into the sandbox — zero network. `assets/echarts.min.js` stays as the readable original, with a Host route and the CDN as fallbacks.
 - The figure lands **after the turn's reply, before the action row** — outside the "called tools" disclosure; the tool call keeps a one-line note that jumps to the figure.
 - The host validator rejects `<iframe>/<object>/<embed>/<form>/<base>`, `document.cookie`, storage APIs, `fetch`, `XMLHttpRequest`, `WebSocket`, `window.top/parent`, `javascript:` URLs, off-allowlist script hosts, and oversized fragments.
-- Design lint warns (never blocks) on missing axis names/units, too many categories or colours, risky chart types (3D/radar/Sankey/graph), unnamed dual axes, missing provenance, and unmarked sample data.
-- The plugin writes only its own state: a boot trail under `$DSH_HOME/dsh-visual-reply/`, saved visual copies there when `archive: true`, and the bundled skill under `$DSH_HOME/skills/visual-reply/`. No user content is written otherwise.
+- Design lint warns (never blocks) on missing axis names/units, too many categories or colours, risky chart types (3D/radar/Sankey/graph), unnamed dual axes, missing provenance, unmarked sample data, and a `viewBox` much narrower than the card (which stretches type and padding).
+- The plugin writes only its own state: a boot trail under `$DSH_HOME/dsh-visual-reply/` (rotated at 256 KiB), saved visual copies there when `archive: true`, and the bundled skill under `$DSH_HOME/skills/visual-reply/`. A skill file it did not install is never overwritten. No user content is written otherwise.
 
 ## Config
 
@@ -75,7 +76,8 @@ Then refresh the Web UI once so the client half loads.
 Run from a repository checkout — the npm package intentionally ships without `test/` and `scripts/`.
 
 ```bash
-npm test          # validate / srcdoc / skill / client / integration
+npm test          # validate / srcdoc / skill / skill-install / client / integration
+                  # also fails when docs/demo.html drifts from lib/srcdoc.js
 
 # live DSH: local ECharts route, client bundle markers, boot trail
 node scripts/verify-local-echarts.mjs http://127.0.0.1:58484
