@@ -40,7 +40,7 @@
     "registry": "https://registry.npmjs.org"
   },
   "scripts": {
-    "test": "node test/validate.test.js && node test/srcdoc.test.js && node test/skill.test.js && node test/client.test.js && node test/integration.test.js",
+    "test": "node test/validate.test.js && node test/srcdoc.test.js && node test/skill.test.js && node test/skill-install.test.js && node test/client.test.js && node test/integration.test.js",
     "verify:local": "node scripts/verify-local-echarts.mjs"
   },
   "dsh": {

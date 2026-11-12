@@ -9,7 +9,7 @@ import { CODES, byteLength, validateVisual } from '../lib/validate.js'
 /** Options the host would pass. */
 const OPTIONS = { maxHtmlBytes: 204800, defaultHeight: 480, allowedScriptHosts: ['cdn.jsdelivr.net'] }
 
-const SVG = '<svg viewBox="0 0 10 10"><rect width="10" height="4"/></svg>'
+const SVG = '<svg viewBox="0 0 720 300"><rect width="720" height="120"/></svg>'
 const CHART = '<div class="chart"></div>'
 
 /** Run the validator and return the verdict. */
@@ -344,6 +344,24 @@ for (const type of ['radar', 'sankey', 'graph', 'sunburst', 'treemap', 'globe'])
 {
   assert.deepEqual(check({ title: 't', html: SVG, caption: '口径：示例数据，仅演示', sample: true }).warnings, [])
   assert.deepEqual(check({ title: 't', html: SVG, caption: '口径：近 30 天', sample: false }).warnings, [])
+}
+
+// ── lint 9：SVG 画布比卡片窄，撑满会整体放大 ─────────────────────────────
+{
+  // 360 宽画布 + width="100%"：卡片 ≈700，会放大到 ~1.9 倍，字号/留白跟着变大。
+  const html = '<svg viewBox="0 0 360 196" width="100%"><rect width="40" height="20"/></svg>'
+  const verdict = lint(html)
+  assert.equal(verdict.ok, true, 'lint 只提示，绝不阻断渲染')
+  assert.equal(verdict.warnings.length, 1)
+  assert.match(verdict.warnings[0], /360/)
+  assert.match(verdict.warnings[0], /700/)
+
+  // 按卡片实际宽度设计：不提示。
+  assert.deepEqual(lint('<svg viewBox="0 0 720 300" width="100%"><rect width="40" height="20"/></svg>').warnings, [])
+  // 写死宽度的小图是有意为之：不提示。
+  assert.deepEqual(lint('<svg viewBox="0 0 120 120" width="120"><rect width="40" height="20"/></svg>').warnings, [])
+  // 没有 viewBox 的画布不按缩放判断。
+  assert.deepEqual(lint('<svg width="100%"><rect width="40" height="20"/></svg>').warnings, [])
 }
 
 // ── warnings 不重复：多条规则同时命中也只各说一句 ─────────────────────────

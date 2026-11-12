@@ -16,7 +16,7 @@
  * @module dsh-visual-reply
  */
 
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -36,6 +36,31 @@ export const name = 'visual-reply'
  * which is the whole point: a CDN outage used to leave a blank card.
  */
 export const ECHARTS_ROUTE = '/dsh-visual-reply/echarts.min.js'
+
+/** Boot-trail file name, inside the plugin's own state directory. */
+const TRAIL_FILE = 'boot-trail.jsonl'
+/** When the trail grows past this, keep only the most recent lines. */
+const TRAIL_MAX_BYTES = 256 * 1024
+/** Lines kept on rotation (a few hundred boots is plenty of history). */
+const TRAIL_KEEP_LINES = 200
+
+/**
+ * Keep the boot trail bounded: past the cap, keep the newest lines only.
+ *
+ * The trail is a diagnostic append log written on every activation, so without
+ * rotation it would grow for the life of the profile with nothing to prune it.
+ * @param {string} file - absolute trail path.
+ * @returns {void}
+ */
+function rotateTrail(file) {
+  try {
+    if (statSync(file).size <= TRAIL_MAX_BYTES) return
+    const lines = readFileSync(file, 'utf8').split('\n').filter((line) => line !== '')
+    writeFileSync(file, `${lines.slice(-TRAIL_KEEP_LINES).join('\n')}\n`, 'utf8')
+  } catch {
+    /* first boot, or an unreadable trail: the append below handles it */
+  }
+}
 
 /**
  * Services this plugin needs. `loader` resolves the in-box `defineTool`
@@ -189,7 +214,7 @@ export async function apply(ctx, config = {}) {
   const cfg = resolveConfig(config)
 
   /**
-   * 留一行启动痕迹：`$DSH_HOME/visual-reply/boot-trail.jsonl`。
+   * 留一行启动痕迹：`$DSH_HOME/dsh-visual-reply/boot-trail.jsonl`。
    *
    * 排查「host 半侧到底有没有跑到这一步」时，日志往往拿不到，而这一步
    * 写盘最多几字节；写失败也只是少一行诊断，永不打断主流程。
@@ -201,8 +226,10 @@ export async function apply(ctx, config = {}) {
     try {
       const dir = stateDir(cfg.dshHome)
       mkdirSync(dir, { recursive: true })
+      const file = path.join(dir, TRAIL_FILE)
+      rotateTrail(file)
       appendFileSync(
-        path.join(dir, 'boot-trail.jsonl'),
+        file,
         `${JSON.stringify({ at: new Date().toISOString(), stage, ...extra })}\n`,
         'utf8',
       )

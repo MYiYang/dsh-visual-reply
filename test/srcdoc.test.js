@@ -4,6 +4,9 @@
  * tokens on its copy so the two cannot drift silently.
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+import { demoDocument } from '../scripts/build-demo.mjs'
 
 import {
   BASE_STYLE,
@@ -151,5 +154,14 @@ assert.equal(ECHARTS_ROUTE, '/dsh-visual-reply/echarts.min.js')
 assert.equal(EXTERNAL_SCRIPT.test('<script src="https://cdn.jsdelivr.net/a.js"></script>'), true)
 assert.equal(/^\w{8}$/.test(makeNonce()), true)
 assert.equal(runtimeSource('x1').includes('var ID="x1"'), true)
+
+// ── 7. docs/demo.html 必须由同一个 builder 生成 ───────────────────────────
+const demoHtml = readFileSync(new URL('../docs/demo.html', import.meta.url), 'utf8')
+assert.equal(
+  demoHtml,
+  demoDocument(),
+  'docs/demo.html 与 lib/srcdoc.js 不一致：运行 node scripts/build-demo.mjs 重新生成',
+)
+assert.equal(demoHtml.includes('--vr-series-1'), true, 'demo 要用系列令牌，不要退回 --vr-accent')
 
 console.log('srcdoc.test.js: ok')

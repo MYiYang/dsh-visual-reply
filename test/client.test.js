@@ -388,7 +388,7 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   assert.equal(findAll(tree, (n) => n?.type === 'iframe')[0].props.style.height, '480px', '超过上限按上限显示')
   assert.equal(buttonLabels(tree).includes('expand'), true, '超上限应给展开按钮')
 
-  // 小图按内容收，但不低于 MIN_HEIGHT。
+  // 小图按内容收：量到内容之后不再被 240px 的占位高度撑住（底部留白）。
   const short = sampleCard({ height: 1024, html: '<svg></svg>' })
   let tree2 = renderFigure(short)
   const attached2 = attachFrame(tree2)
@@ -396,7 +396,7 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   runEffects()
   emit({ __vr: 'height', id: nonce2, height: 100 }, attached2.contentWindow)
   tree2 = rerenderFigure(short)
-  assert.equal(findAll(tree2, (n) => n?.type === 'iframe')[0].props.style.height, '240px')
+  assert.equal(findAll(tree2, (n) => n?.type === 'iframe')[0].props.style.height, '100px', '短图按内容收，不留 240px 空白')
   emit({ __vr: 'height', id: nonce2, height: 512 }, attached2.contentWindow)
   tree2 = rerenderFigure(short)
   assert.equal(findAll(tree2, (n) => n?.type === 'iframe')[0].props.style.height, '512px')

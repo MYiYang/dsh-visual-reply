@@ -31,6 +31,7 @@
 | Host | `lib/prompt.js` | 「何时画、画成什么样」的系统提示：设计令牌、轴/单位、类别数、口径字段 |
 | Client | `client.js` | 统一 `<Figure>` + `tool.call.toolview` + `conversation.chat.turnTail`：沙箱 iframe、hover 操作、主题热切换、失败三态 |
 | 技能 | `skills/visual-reply/SKILL.md` | 何时出图、图型选择、令牌与模板、自检清单；随插件安装到 `$DSH_HOME/skills/` |
+| 文档 | `docs/demo.html` | 由 `scripts/build-demo.mjs` 从 `lib/srcdoc.js` 生成，就是图 iframe 里那份文档，可离线预览 |
 
 ## 安装
 
@@ -86,7 +87,7 @@ dsh plugin --profile web add link:<绝对路径>
 - ECharts 内置在客户端 bundle（gzip+base64，约 335 KB），渲染时用 `DecompressionStream` 解出即用，零网络；`assets/echarts.min.js` 留作可读原件，Host 静态路由与 CDN 作退路；
 - 工具侧校验器直接拒绝：`<iframe>/<object>/<embed>/<form>/<base>`、`document.cookie`、`localStorage`、`fetch`、`XMLHttpRequest`、`WebSocket`、`window.top/parent`、`javascript:` URL、非白名单脚本域名、超过 `maxHtmlBytes` 的片段；
 - 设计质量 lint 只警告不拦：无坐标轴名/单位、类别过多、颜色过多、高风险图型、双轴未命名、缺口径、示例数据未标注；
-- 插件只写自己的状态目录：`$DSH_HOME/dsh-visual-reply/`（启动痕迹；`archive: true` 时的片段副本）与 `$DSH_HOME/skills/visual-reply/`（随插件安装的技能），除此不写用户内容。
+- 插件只写自己的状态目录：`$DSH_HOME/dsh-visual-reply/`（启动痕迹，超过 256KB 轮转；`archive: true` 时的片段副本）与 `$DSH_HOME/skills/visual-reply/`（随插件安装的技能）；不是自己装进去的 `SKILL.md` 一律不覆盖。除此不写用户内容。
 
 ## 配置
 
@@ -116,7 +117,8 @@ dsh plugin --profile web add link:<绝对路径>
 以下命令需在仓库 checkout 里跑——发布包刻意不带 `test/` 与 `scripts/`：
 
 ```bash
-npm test          # validate / srcdoc / skill / client / integration，五套
+npm test          # validate / srcdoc / skill / skill-install / client / integration，六套
+                  # docs/demo.html 与 lib/srcdoc.js 漂移也会失败
 
 # 运行中的 DSH：路由 / 客户端 bundle / 启动痕迹
 node scripts/verify-local-echarts.mjs http://127.0.0.1:58484
