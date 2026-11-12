@@ -9,7 +9,8 @@
  *   - 薄容器：无外框、无徽标、图体透明，标题 15/500、正文 13/400、口径 12/400；
  *   - 操作收敛：常驻最多两个（复制图片 / 全屏），其余进 `⋯`；
  *   - 尺寸契约：`height` 是「建议最大高度」，实际高度=内容测量值夹在
- *     [MIN_HEIGHT, maxHeight]，超过上限出「展开」而不是卡内滚动；
+ *     [MIN_CONTENT_HEIGHT, maxHeight]，超过上限出「展开」而不是卡内滚动；
+ *     量到内容之前用默认高度占位，量到之后短图按内容收，不留空白大框；
  *   - 主题热切换：srcdoc 不因换主题重建，父级用 postMessage 推色板；
  *   - 失败显式：空白 / 脚本错误 / CSP 拦截 / 溢出各有可读状态与兜底操作。
  *
@@ -38,8 +39,13 @@ window.__ModuleLoader__.load({
     const NS = 'visual-reply'
     /** 未指定高度时的「建议最大高度」。 */
     const DEFAULT_HEIGHT = 480
-    /** 内容再矮也不低于这个高度（避免图被压成一条缝）。 */
+    /** 量到内容之前先按这个高度占位，避免首帧塌成一条缝。 */
     const MIN_HEIGHT = 240
+    /**
+     * 量到真实内容后的高度下限：只防「高度 0 / 空白」时塌陷，
+     * 不再把短内容（三行表格、一个 KPI）撑成 240px 的空白大框。
+     */
+    const MIN_CONTENT_HEIGHT = 24
     /** 高度硬上限；`wide` 图也用这个值。 */
     const MAX_HEIGHT = 1024
     /** 卡片里最多内联渲染的片段字符数（超过只给源码与提示）。 */
@@ -1088,8 +1094,13 @@ window.__ModuleLoader__.load({
       const toastTimer = React.useRef(0)
 
       const cap = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Number(card?.maxHeight) || DEFAULT_HEIGHT))
-      const natural = measured === null ? Math.min(DEFAULT_HEIGHT, cap) : measured
-      const displayHeight = Math.min(cap, Math.max(MIN_HEIGHT, natural))
+      const placeholder = Math.min(DEFAULT_HEIGHT, cap)
+      const natural = measured === null ? placeholder : measured
+      // 量到之前用默认高度占位；量到之后只留 24px 防塌陷。
+      // 之前一律 max(MIN_HEIGHT=240, 内容) 会把三行表格这类短内容
+      // 撑成 240px，底部空一大块——正是「图有边距」的来源。
+      const floor = measured === null ? placeholder : MIN_CONTENT_HEIGHT
+      const displayHeight = Math.min(cap, Math.max(floor, natural))
       const overflows = measured !== null && measured > cap + 8
 
       const srcdoc = React.useMemo(
