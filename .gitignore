@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Local audit output / temporary pack artifacts
+.audit/
+*.tgz
+
+# Internal analysis & research drafts: keep local only (never published)
+docs/ANALYSIS.md
+docs/PLAN-inline-and-local-echarts.md
+docs/RESEARCH-2026-11-design.md
+docs/CHANGES-2026-11.md
+docs/research/
+
+# Logs and caches
+*.log
+npm-debug.log*
+coverage/
+.npm/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local environment
+.env
+.env.*
+*.local

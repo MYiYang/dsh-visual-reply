@@ -1,0 +1,72 @@
+{
+  "name": "dsh-visual-reply",
+  "version": "0.2.0",
+  "description": "Rich visual replies for DeepSeek Harness: a visual_render tool plus a sandboxed in-conversation figure (title, chart, provenance) and a bundled skill that decides when a figure earns its place.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./assets/*": "./assets/*"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/config.js",
+    "lib/validate.js",
+    "lib/srcdoc.js",
+    "lib/prompt.js",
+    "lib/skill-install.js",
+    "skills/",
+    "assets/echarts.min.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "THIRD-PARTY-LICENSES.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MYiYang/dsh-visual-reply.git"
+  },
+  "homepage": "https://github.com/MYiYang/dsh-visual-reply#readme",
+  "bugs": {
+    "url": "https://github.com/MYiYang/dsh-visual-reply/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "scripts": {
+    "test": "node test/validate.test.js && node test/srcdoc.test.js && node test/skill.test.js && node test/client.test.js && node test/integration.test.js",
+    "verify:local": "node scripts/verify-local-echarts.mjs"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "engines": {
+    "node": ">=22.16.0",
+    "dsh": ">=0.2.2-rc.1"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "visualization",
+    "chart",
+    "echarts",
+    "rich-reply",
+    "generative-ui"
+  ],
+  "author": "MYiYang",
+  "license": "MIT"
+}

@@ -1,0 +1,16 @@
+# Normalize line endings: the authoring machine uses core.autocrlf=true,
+# so pin LF in the repository instead of letting the checkout setting decide.
+* text=auto eol=lf
+
+*.js text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+
+# Vendored assets / generated bundles: store bytes as-is, keep out of diffs
+# and language stats. `client.js` ends with a 447 KB single-line embedded
+# ECharts payload, so treat it as binary content in git.
+assets/echarts.min.js -text linguist-vendored
+client.js -text linguist-vendored

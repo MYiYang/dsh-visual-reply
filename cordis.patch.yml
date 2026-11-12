@@ -1,0 +1,27 @@
+# dsh-visual-reply bundle patch.
+#
+# Mounts the Host half (`visual_render` tool + system-prompt section) and the
+# Client half (a `tool.call.toolview` entry keyed by the wire tool name, which
+# draws the visual inside a sandboxed iframe).
+#
+# The row ships ENABLED: it only renders what the model hands it, never writes
+# user files, and never touches the filesystem at runtime unless `archive` is
+# switched on. Turn it off from Settings → Plugins (or flip `enabled` below)
+# and the tool stops registering; already-recorded cards fall back to the
+# generic tool card because the args still live in the session events.
+#
+# Config knobs (all optional; defaults live in lib/config.js):
+#   enabled:            true   master switch — the tool only registers when true
+#   maxHtmlBytes:    204800    hard cap on the HTML fragment (bytes)
+#   defaultHeight:      480    suggested maximum iframe height, clamped to 240..1024
+#   allowedScriptHosts         external <script src> allowlist
+#                       ['cdn.jsdelivr.net']   — a fallback only: ECharts ships
+#                       locally (assets/echarts.min.js) and is injected inline,
+#                       so figures never touch the network.
+#   archive:          false    write a copy of each visual to $DSH_HOME/visual-reply/
+#   injectPrompt:      true    add the "when to draw" section to the system prompt
+- insert:
+    - id: visual-reply
+      name: 'dsh-visual-reply'
+      config:
+        enabled: true
