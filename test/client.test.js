@@ -7,6 +7,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
+import { runtimeSource as libRuntimeSource } from '../lib/srcdoc.js'
+
 /** Captured `window.__ModuleLoader__.load` definition. */
 let loaded
 
@@ -363,6 +365,7 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   assert.equal(labels.includes('copyImage'), true)
   assert.equal(labels.includes('fullscreen'), true)
   assert.equal(labels.includes('downloadPng'), true)
+  assert.equal(labels.includes('downloadPdf'), true, '菜单要有 PDF 导出')
   assert.equal(labels.includes('downloadHtml'), true)
   assert.equal(labels.includes('copyData'), true)
   assert.equal(labels.includes('openWindow'), false, '新窗口已取消')
@@ -649,6 +652,52 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   assert.equal(exported.includes('data-vr-data'), true)
   assert.equal(internals.CSS.includes('.vr-caption{'), true)
   assert.equal(internals.CSS.includes('.vr-badge'), false, '徽标已移除')
+}
+
+
+// ── 16. 导出：卡片合成 + PDF 包装 ────────────────────────────────────────
+{
+  // 折行：空格优先断词；比整行还宽的 token（CJK 长句）逐字断。
+  const measure = (text) => text.length * 10
+  assert.deepEqual(internals.wrapLines(measure, 'alpha beta', 200), ['alpha beta'])
+  assert.deepEqual(internals.wrapLines(measure, 'alpha beta', 60), ['alpha', 'beta'])
+  assert.deepEqual(internals.wrapLines(measure, '数据可视化测试', 40), ['数据可视', '化测试'])
+  assert.deepEqual(internals.wrapLines(measure, '   ', 80), [])
+
+  // PDF：单页、内嵌 JPEG、xref 偏移自洽，页面尺寸按 96dpi 换 pt。
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+  const pdf = internals.buildPdf(jpeg, 1600, 900)
+  const text = new TextDecoder().decode(pdf)
+  assert.equal(text.startsWith('%PDF-1.4'), true)
+  assert.equal(text.includes('/Type /Catalog'), true)
+  assert.equal(text.includes('/MediaBox [0 0 1200 675]'), true)
+  assert.equal(text.includes('/Filter /DCTDecode'), true)
+  assert.equal(text.includes('/Width 1600 /Height 900'), true)
+  assert.equal(text.trimEnd().endsWith('%%EOF'), true)
+  const startxref = Number(/startxref\n(\d+)\n%%EOF\n$/.exec(text)[1])
+  assert.equal(text.slice(startxref, startxref + 4), 'xref')
+  const entries = text.slice(startxref).split('\n')
+  for (let id = 1; id <= 5; id += 1) {
+    const offset = Number(entries[id + 2].slice(0, 10))
+    assert.equal(text.slice(offset, offset + `${id} 0 obj`.length), `${id} 0 obj`, `对象 ${id} 的 xref 偏移`)
+  }
+  assert.equal(Buffer.from(pdf).indexOf(Buffer.from(jpeg)) > 0, true, 'JPEG 字节应原样进入流')
+
+  // 运行时：canvas/svg 都取不到时退回 HTML 栅格化，而不是直接报「没有图」。
+  const runtime = internals.runtimeSource('x1')
+  assert.equal(runtime.includes('function htmlPng'), true)
+  assert.equal(runtime.includes('foreignObject'), true)
+  assert.equal(runtime.includes('xmlText'), true)
+  assert.equal(runtime.includes('htmlPng(function(dataUrl,error){send('), true, 'exportPng 必须有 HTML 兜底')
+  // 两份 runtime 必须逐字一致：lib/srcdoc.js 是同一份 builder 的镜像。
+  assert.equal(runtime, libRuntimeSource('x1'), 'client.js 与 lib/srcdoc.js 的 runtime 不一致')
+
+  // 词典：两种语言都要有 PDF 与导出失败文案。
+  for (const dict of [internals.zh, internals.en]) {
+    assert.equal(typeof dict.downloadPdf, 'string')
+    assert.equal(typeof dict.exportFailed, 'string')
+    assert.equal(typeof dict.downloadedPng, 'string')
+  }
 }
 
 console.log('client.test.js: ok')

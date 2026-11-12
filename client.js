@@ -246,6 +246,10 @@ window.__ModuleLoader__.load({
       copiedImage: '已复制图片',
       copyFailed: '复制失败，已改为下载',
       downloadPng: '下载 PNG',
+      downloadPdf: '下载 PDF',
+      downloadedPng: '已下载 PNG',
+      downloadedPdf: '已下载 PDF',
+      exportFailed: '这张图导不出来：图里没有可栅格化的内容',
       downloadHtml: '下载 HTML',
       copyData: '复制数据',
       copiedData: '已复制数据',
@@ -288,6 +292,10 @@ window.__ModuleLoader__.load({
       copiedImage: 'Image copied',
       copyFailed: 'Copy failed — downloaded instead',
       downloadPng: 'Download PNG',
+      downloadPdf: 'Download PDF',
+      downloadedPng: 'PNG downloaded',
+      downloadedPdf: 'PDF downloaded',
+      exportFailed: 'Nothing to export — the figure has no rasterizable content',
       downloadHtml: 'Download HTML',
       copyData: 'Copy data',
       copiedData: 'Data copied',
@@ -697,9 +705,24 @@ window.__ModuleLoader__.load({
         'var svg=document.querySelector("svg");if(svg){var attr=svg.getAttribute("data-vr-data");if(attr){var parsed=jsonRows(attr);if(parsed)return parsed}}',
         'var ec=echartsData();if(ec)return ec;',
         'return null}catch(e){return null}}',
+        'function xmlText(v){return String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}',
+        'function htmlPng(done){try{var body=document.body;if(!body)return done(null,"没有可导出的图");',
+        'var w=Math.ceil(body.getBoundingClientRect().width);var h=Math.ceil(body.getBoundingClientRect().height);',
+        'if(!(w>1&&h>1))return done(null,"没有可导出的图");',
+        'var styles="";var sheets=document.querySelectorAll("style");for(var i=0;i<sheets.length;i++)styles+=sheets[i].textContent||"";',
+        'var markup=new XMLSerializer().serializeToString(body).replace(/^<body[^>]*>/i,"").replace(/<\\/body>$/i,"");',
+        'var bg=backgroundOf();var fg=(getComputedStyle(document.documentElement).getPropertyValue("--vr-fg")||"").trim()||"#111111";',
+        'var svg="<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'" + w + "\' height=\'" + h + "\'><foreignObject width=\'100%\' height=\'100%\'><div xmlns=\'http://www.w3.org/1999/xhtml\' style=\'width:" + w + "px;height:" + h + "px;margin:0;padding:0;background:" + bg + ";color:" + fg + "\'><style>" + xmlText(styles) + "</style>" + markup + "</div></foreignObject></svg>";',
+        'var img=new Image();img.onload=function(){try{var c=document.createElement("canvas");c.width=w*2;c.height=h*2;',
+        'var ctx=c.getContext("2d");if(!ctx)return done(null,"canvas unavailable");',
+        'ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);',
+        'done(c.toDataURL("image/png"),"")}catch(e){done(null,String(e&&e.message||"html export failed"))}};',
+        'img.onerror=function(){done(null,"html export failed")};',
+        'img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg)',
+        '}catch(e){done(null,String(e&&e.message||"html export failed"))}}',
         'function exportPng(requestId){var data=canvasPng();if(data){send({__vr:"export-result",requestId:requestId,format:"png",ok:true,data:data,error:""});return}',
         'var svg=document.querySelector("svg");if(svg){svgPng(svg,function(dataUrl,error){send({__vr:"export-result",requestId:requestId,format:"png",ok:!!dataUrl,data:dataUrl||"",error:error||""})});return}',
-        'send({__vr:"export-result",requestId:requestId,format:"png",ok:false,data:"",error:"没有可导出的图"})}',
+        'htmlPng(function(dataUrl,error){send({__vr:"export-result",requestId:requestId,format:"png",ok:!!dataUrl,data:dataUrl||"",error:error||""})})}',
         'window.vrPick=function(payload){send({__vr:"pick",payload:String(payload==null?"":payload).slice(0,300)})};',
         'window.addEventListener("message",function(e){var d=e.data;if(!d||typeof d!=="object")return;',
         'if(d.__vr==="theme"){applyTheme(d.palette);return}',
@@ -931,6 +954,244 @@ window.__ModuleLoader__.load({
       } catch {
         /* ignore */
       }
+    }
+
+    /** 合成导出的栅格密度：2x 让文字在视网膜屏/打印时不发虚。 */
+    const EXPORT_SCALE = 2
+    /** 合成卡片四周的留白，CSS px。 */
+    const EXPORT_PAD = 24
+    /** 标题度量：15/22、字重 500，与屏上卡片一致。 */
+    const EXPORT_TITLE_FONT = '500 15px -apple-system, "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif'
+    const EXPORT_TITLE_LINE = 22
+    const EXPORT_TITLE_GAP = 10
+    /** 口径行度量：12/18。 */
+    const EXPORT_CAPTION_FONT = '400 12px -apple-system, "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif'
+    const EXPORT_CAPTION_LINE = 18
+    const EXPORT_CAPTION_GAP = 10
+
+    /**
+     * 把 data URL 解成 Image 元素。
+     * @param {string} src - data URL。
+     * @returns {Promise<any>} 解码后的图片。
+     */
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => resolve(image)
+        image.onerror = () => reject(new Error('image decode failed'))
+        image.src = src
+      })
+    }
+
+    /**
+     * 按像素宽度折行。
+     *
+     * 空格优先断词；比整行还宽的 token（CJK 长句、URL）逐字断开——这和卡片
+     * 里 CSS 的实际换行行为一致。
+     * @param {(text: string) => number} measure - 量一行文本的宽度。
+     * @param {string} text - 段落。
+     * @param {number} maxWidth - 行宽，px。
+     * @returns {string[]} 折好的行。
+     */
+    function wrapLines(measure, text, maxWidth) {
+      const lines = []
+      const source = String(text)
+      if (source.trim() === '') return lines
+      for (const token of source.split(' ')) {
+        if (token === '') continue
+        const last = lines.length - 1
+        if (last >= 0 && measure(`${lines[last]} ${token}`) <= maxWidth) {
+          lines[last] = `${lines[last]} ${token}`
+          continue
+        }
+        if (measure(token) <= maxWidth) {
+          lines.push(token)
+          continue
+        }
+        let piece = ''
+        for (const char of token) {
+          if (piece !== '' && measure(piece + char) > maxWidth) {
+            lines.push(piece)
+            piece = char
+          } else {
+            piece += char
+          }
+        }
+        if (piece !== '') lines.push(piece)
+      }
+      return lines
+    }
+
+    /**
+     * 把一张图合成成用户看到的「卡片」：主题底色 + 结论标题 + 图 + 口径行。
+     *
+     * iframe 里只有图本体，标题与口径在 React 层；直接导出 iframe 会得到一张
+     * 没有结论的孤立图。因此导出统一走父层合成。
+     * @param {any} card - 卡片数据。
+     * @param {{element: any, cssWidth: number}} figure - 解码后的图 + 屏上宽度。
+     * @param {{fg: string, muted: string, bg: string}} palette - 当前主题色板。
+     * @param {(key: string) => string} t - 词典。
+     * @returns {any | null} 合成后的 canvas。
+     */
+    function composeCard(card, figure, palette, t) {
+      try {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return null
+        const width = Math.max(360, Math.round(figure.cssWidth) || 760)
+        const inner = width - EXPORT_PAD * 2
+        const title = String(card?.title ?? '').trim()
+        const provenance = captionOf(card, {
+          source: t('sourcePrefix'),
+          window: t('windowPrefix'),
+          assumptions: t('assumptionsPrefix'),
+        })
+        const sampleLabel = t('sampleData')
+        const caption = [
+          // 口径里已经写了「示例数据」就不再重复打一次标。
+          card?.sample === true && !provenance.includes(sampleLabel) ? sampleLabel : '',
+          provenance,
+        ].filter((part) => part !== '').join(' · ')
+        ctx.font = EXPORT_TITLE_FONT
+        const titleLines = title === '' ? [] : wrapLines((text) => ctx.measureText(text).width, title, inner)
+        ctx.font = EXPORT_CAPTION_FONT
+        const captionLines = caption === '' ? [] : wrapLines((text) => ctx.measureText(text).width, caption, inner)
+        const ratio = figure.element.naturalHeight / Math.max(1, figure.element.naturalWidth)
+        const figureWidth = inner
+        const figureHeight = Math.max(60, Math.round(figureWidth * ratio))
+        const titleHeight = titleLines.length * EXPORT_TITLE_LINE
+        const captionHeight = captionLines.length * EXPORT_CAPTION_LINE
+        const height = EXPORT_PAD + titleHeight + (titleHeight > 0 ? EXPORT_TITLE_GAP : 0) + figureHeight
+          + (captionHeight > 0 ? EXPORT_CAPTION_GAP + captionHeight : 0) + EXPORT_PAD
+        canvas.width = Math.round(width * EXPORT_SCALE)
+        canvas.height = Math.round(height * EXPORT_SCALE)
+        ctx.scale(EXPORT_SCALE, EXPORT_SCALE)
+        ctx.fillStyle = palette?.bg || '#ffffff'
+        ctx.fillRect(0, 0, width, height)
+        ctx.textBaseline = 'top'
+        let y = EXPORT_PAD
+        ctx.fillStyle = palette?.fg || '#0f1115'
+        ctx.font = EXPORT_TITLE_FONT
+        for (const line of titleLines) {
+          ctx.fillText(line, EXPORT_PAD, y)
+          y += EXPORT_TITLE_LINE
+        }
+        if (titleHeight > 0) y += EXPORT_TITLE_GAP
+        ctx.drawImage(figure.element, EXPORT_PAD, y, figureWidth, figureHeight)
+        y += figureHeight
+        if (captionHeight > 0) {
+          y += EXPORT_CAPTION_GAP
+          ctx.fillStyle = palette?.muted || '#646a73'
+          ctx.font = EXPORT_CAPTION_FONT
+          for (const line of captionLines) {
+            ctx.fillText(line, EXPORT_PAD, y)
+            y += EXPORT_CAPTION_LINE
+          }
+        }
+        return canvas
+      } catch {
+        return null
+      }
+    }
+
+    /**
+     * 把一张 JPEG 包成单页 PDF。
+     *
+     * 手写而不是引 PDF 依赖：一页、一张图，只需要三个对象。页面尺寸按
+     * 96 dpi 换算成 pt，阅读器里物理尺寸与屏上一致。
+     * @param {Uint8Array} jpeg - JPEG 字节。
+     * @param {number} width - 图片宽，px。
+     * @param {number} height - 图片高，px。
+     * @returns {Uint8Array} PDF 字节。
+     */
+    function buildPdf(jpeg, width, height) {
+      const encoder = new TextEncoder()
+      const chunks = []
+      let size = 0
+      /**
+       * @param {string | Uint8Array} value - 片段。
+       * @returns {void}
+       */
+      const add = (value) => {
+        const bytes = typeof value === 'string' ? encoder.encode(value) : value
+        chunks.push(bytes)
+        size += bytes.length
+      }
+      const offsets = []
+      /**
+       * @param {number} id - 对象号。
+       * @param {string} head - 字典。
+       * @param {Uint8Array} [stream] - 流内容。
+       * @returns {void}
+       */
+      const object = (id, head, stream) => {
+        offsets[id] = size
+        add(`${id} 0 obj\n${head}\n`)
+        if (stream !== undefined) {
+          add('stream\n')
+          add(stream)
+          add('\nendstream\n')
+        }
+        add('endobj\n')
+      }
+      const pageWidth = Math.max(1, Math.round(width * 0.75))
+      const pageHeight = Math.max(1, Math.round(height * 0.75))
+      add('%PDF-1.4\n%visual-reply\n')
+      object(1, '<< /Type /Catalog /Pages 2 0 R >>')
+      object(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>')
+      object(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >>`)
+      const content = encoder.encode(`q ${pageWidth} 0 0 ${pageHeight} 0 0 cm /Im0 Do Q\n`)
+      object(4, `<< /Length ${content.length} >>`, content)
+      object(5, `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>`, jpeg)
+      const xref = size
+      add('xref\n0 6\n0000000000 65535 f \n')
+      for (let id = 1; id <= 5; id += 1) add(`${String(offsets[id]).padStart(10, '0')} 00000 n \n`)
+      add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`)
+      const bytes = new Uint8Array(size)
+      let at = 0
+      for (const chunk of chunks) {
+        bytes.set(chunk, at)
+        at += chunk.length
+      }
+      return bytes
+    }
+
+    /**
+     * 浏览器下载一个 Blob。
+     * @param {Blob} blob - 内容。
+     * @param {string} filename - 文件名。
+     * @returns {void}
+     */
+    function downloadBlob(blob, filename) {
+      try {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      } catch {
+        /* ignore */
+      }
+    }
+
+    /**
+     * canvas → Blob（异步编码；失败回 null）。
+     * @param {any} canvas - canvas 元素。
+     * @param {string} type - MIME。
+     * @param {number} [quality] - 有损格式的质量。
+     * @returns {Promise<Blob | null>} Blob 或 null。
+     */
+    function canvasBlob(canvas, type, quality) {
+      return new Promise((resolve) => {
+        try {
+          canvas.toBlob((blob) => resolve(blob ?? null), type, quality)
+        } catch {
+          resolve(null)
+        }
+      })
     }
 
     /** 等待中的导出请求：nonce+requestId → resolver。 */
@@ -1222,18 +1483,35 @@ window.__ModuleLoader__.load({
         }
       }
 
-      async function copyImage() {
+      /**
+       * 导出当前卡片：先向 iframe 要图，再在父层合成标题、口径与主题底色。
+       * @returns {Promise<any | null>} 合成后的 canvas，失败为 null。
+       */
+      async function exportComposed() {
         const frame = frameElement()
-        if (frame === null) return
+        if (frame === null) return null
         const result = await requestExport(frame, nonce, 'png')
-        if (result === null || result.ok !== true || typeof result.data !== 'string') {
-          flash(t('copyFailed'))
+        if (result === null || result.ok !== true || typeof result.data !== 'string') return null
+        let element = null
+        try {
+          element = await loadImage(result.data)
+        } catch {
+          return null
+        }
+        const box = frame.getBoundingClientRect()
+        const cssWidth = box.width > 0 ? box.width : (frame.clientWidth || 760)
+        return composeCard(card, { element, cssWidth }, palette, t)
+      }
+
+      async function copyImage() {
+        const canvas = await exportComposed()
+        if (canvas === null) {
+          flash(t('exportFailed'))
           return
         }
+        const blob = await canvasBlob(canvas, 'image/png')
         try {
-          const response = await fetch(result.data)
-          const blob = await response.blob()
-          if (navigator?.clipboard !== undefined && typeof ClipboardItem === 'function') {
+          if (blob !== null && navigator?.clipboard !== undefined && typeof ClipboardItem === 'function') {
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
             flash(t('copiedImage'))
             return
@@ -1241,19 +1519,44 @@ window.__ModuleLoader__.load({
         } catch {
           /* 落到下载 */
         }
-        downloadDataUrl(result.data, `${slugOf(card?.title)}.png`)
+        if (blob !== null) downloadBlob(blob, `${slugOf(card?.title)}.png`)
+        else downloadDataUrl(canvas.toDataURL('image/png'), `${slugOf(card?.title)}.png`)
         flash(t('copiedImage'))
       }
 
       async function savePng() {
-        const frame = frameElement()
-        if (frame === null) return
-        const result = await requestExport(frame, nonce, 'png')
-        if (result === null || result.ok !== true || typeof result.data !== 'string') {
-          flash(t('copyFailed'))
+        const canvas = await exportComposed()
+        if (canvas === null) {
+          flash(t('exportFailed'))
           return
         }
-        downloadDataUrl(result.data, `${slugOf(card?.title)}.png`)
+        const blob = await canvasBlob(canvas, 'image/png')
+        if (blob !== null) downloadBlob(blob, `${slugOf(card?.title)}.png`)
+        else downloadDataUrl(canvas.toDataURL('image/png'), `${slugOf(card?.title)}.png`)
+        flash(t('downloadedPng'))
+      }
+
+      /**
+       * 导出 PDF：同一张合成图按 JPEG 嵌进一页 PDF。
+       *
+       * PDF 里没有文字层（图即内容），换来零依赖、离线可用、与屏上完全一致。
+       * @returns {Promise<void>} 完成后无返回值。
+       */
+      async function savePdf() {
+        const canvas = await exportComposed()
+        if (canvas === null) {
+          flash(t('exportFailed'))
+          return
+        }
+        const blob = await canvasBlob(canvas, 'image/jpeg', 0.92)
+        if (blob === null) {
+          flash(t('exportFailed'))
+          return
+        }
+        const jpeg = new Uint8Array(await blob.arrayBuffer())
+        const pdf = buildPdf(jpeg, canvas.width, canvas.height)
+        downloadBlob(new Blob([pdf], { type: 'application/pdf' }), `${slugOf(card?.title)}.pdf`)
+        flash(t('downloadedPdf'))
       }
 
       async function saveData() {
@@ -1294,6 +1597,7 @@ window.__ModuleLoader__.load({
       } else {
         menuButtons.push(h('button', { key: 'data', className: 'vr-btn', type: 'button', onClick: () => { void saveData() } }, t('copyData')))
         menuButtons.push(h('button', { key: 'png', className: 'vr-btn', type: 'button', onClick: () => { void savePng() } }, t('downloadPng')))
+        menuButtons.push(h('button', { key: 'pdf', className: 'vr-btn', type: 'button', onClick: () => { void savePdf() } }, t('downloadPdf')))
         menuButtons.push(h('button', { key: 'html', className: 'vr-btn', type: 'button', onClick: () => downloadText(srcdoc, `${slugOf(title)}.html`, 'text/html') }, t('downloadHtml')))
         menuButtons.push(h('button', { key: 'source', className: 'vr-btn', type: 'button', onClick: () => setSourceShown((v) => !v) }, sourceShown ? t('hideSource') : t('source')))
         if (!collapsed) menuButtons.push(h('button', { key: 'collapse', className: 'vr-btn', type: 'button', onClick: () => setCollapsed(true) }, t('collapse')))
@@ -1684,6 +1988,9 @@ window.__ModuleLoader__.load({
       /** 仅供单测盘点内部实现，运行时不读。 */
       __internals: {
         buildSrcdoc,
+        buildPdf,
+        wrapLines,
+        composeCard,
         VisualCard,
         Figure,
         CompactRow,

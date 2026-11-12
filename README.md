@@ -1,6 +1,6 @@
 # dsh-visual-reply
 
-Rich visual replies for DeepSeek Harness: the model calls one tool (`visual_render`) and the answer grows an inline figure — a 15px/500 conclusion title, an unframed interactive chart at body width, and a 12px source/method line. Hover the figure for the two primary actions (copy image / fullscreen); the rest live in `⋯` (copy data, download PNG/HTML, open in window, view source, collapse). Instead of a pasted HTML code block, a dead screenshot, or a tool card that looks like a debug panel.
+Rich visual replies for DeepSeek Harness: the model calls one tool (`visual_render`) and the answer grows an inline figure — a 15px/500 conclusion title, an unframed interactive chart at body width, and a 12px source/method line. Hover the figure for the two primary actions (copy image / fullscreen); the rest live in `⋯` (copy data, download PNG/PDF/HTML, view source, collapse). Exports are composed here, not cropped from the iframe: the conclusion title, the figure and the provenance line are re-drawn on the theme surface at 2x, and a table/HTML fragment is rasterized instead of failing with “nothing to export”. Instead of a pasted HTML code block, a dead screenshot, or a tool card that looks like a debug panel.
 
 This is a reconstruction of the "text + figure" analysis replies seen in WorkBuddy / Doubao Work, redesigned in 2026-11 against how Claude, ChatGPT/Codex and the open-source ecosystem do it: a **skill** decides when a figure earns its place, a **client Figure** puts it into the conversation flow, and **data tools** keep the numbers honest.
 
@@ -92,6 +92,8 @@ A real-DOM smoke test (React 18 + jsdom: two turn-tail figures, height messages,
 - Theme switches are pushed via `postMessage`; ECharts canvas colours need the fragment to re-`setOption` on the `vr-theme` event (documented in the skill).
 - Figures stay after the turn's prose — DSH has no inline Markdown extension point, and shadowing the shipped assistant node is too risky.
 - `html` counts toward model context; the skill caps a fragment at 40 KB / 300 lines.
+- PDF export is one page with the composed card as a JPEG (no text layer, so titles are not selectable); the print/outline size follows the card at 96 dpi.
+- Table/HTML fragments are exported by serializing the frame body into an SVG `foreignObject`; a fragment with remote images can taint that canvas and falls back to the error toast.
 
 ## License
 
