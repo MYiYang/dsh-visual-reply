@@ -112,6 +112,7 @@ eq(/height[^\n]*按内容给/.test(skill), false, '过时的「height 按内容�
 // ── 保留的分步与坑：基线、viewBox、体积、脚本白名单 ─────────────────────
 ok(skill.includes('基线'), 'SKILL.md 缺标签基线对齐规则')
 ok(skill.includes('viewBox'), 'SKILL.md 缺 SVG 高度交给 viewBox 规则')
+ok(skill.includes('viewBox="0 0 720 300"'), '模板画布必须按卡片宽度 ≈700 设计，避免整图被放大')
 ok(skill.includes('40KB'), 'SKILL.md 缺 40KB 体积上限')
 ok(skill.includes('300 行'), 'SKILL.md 缺 300 行上限')
 ok(skill.includes('cdn.jsdelivr.net'), 'SKILL.md 缺外部脚本白名单')

@@ -33,7 +33,7 @@ description: 当分析类回答需要配图时使用（趋势、占比、排名�
 
 1. **先把数取齐**。图表数据必须来自真实取数（SQL / 文件 / 已核验来源）。取不到就画空态图或示例结构，并置 `sample: true`、在 `caption` 里写明「示例结构，未取得可靠数据」——**任何情况下都不许编造数值**。
 2. **选图型**：趋势→折线/面积；占比→环形/堆叠条；排名→横向条；多维对比→分组条/热力；过程→步骤图/状态机；结构→树/分组块。一次调用只画一张图，一张图只表达一件事；3D/雷达/桑基/关系图默认不用，确需先在正文说明理由。
-3. **写片段**：只写 body 级 HTML，只用设计令牌。坐标轴必须有 `name` 且带单位；条形图从 0 起；饼/环 ≤6 类、条形 ≤12 类、系列 ≤6 个；SVG 只写 `viewBox` 与 `width="100%"`（高度交给 viewBox），文字 `y` 是基线、要对齐。优先内联 SVG（离线可看、无依赖）；需要交互才用 ECharts——不要写外部 script 地址，本地 ECharts 由插件注入，并给它固定高度的容器。表格是保底形态。
+3. **写片段**：只写 body 级 HTML，只用设计令牌。坐标轴必须有 `name` 且带单位；条形图从 0 起；饼/环 ≤6 类、条形 ≤12 类、系列 ≤6 个；SVG 只写 `viewBox` 与 `width="100%"`（高度交给 viewBox；**viewBox 宽度按卡片 ≈700 设计**，别用 360 宽画布再撑满，否则整体放大、留白翻倍），文字 `y` 是基线、要对齐。优先内联 SVG（离线可看、无依赖）；需要交互才用 ECharts——不要写外部 script 地址，本地 ECharts 由插件注入，并给它固定高度的容器。表格是保底形态。
    **数据契约（必做）**：每张图都要能被「复制数据」取出原始数值。片段里加一行 `window.__vrData = [["季度","单量"],["一季度",62],["二季度",88]]`（二维数组、首行表头；写成 JSON 字符串也认），或放一张 `display:none` 的 `<table>`，或给 SVG 根节点加 `data-vr-data='[[...]]'`。只画图形不声明数据，「复制数据」就会报「没带数据」。ECharts 图会从 option 自动提取，但显式声明更稳。
 4. **调用 `visual_render`**：
    - `title`：一句能独立读懂的结论（≤120 字），不是「图表1」。
@@ -45,28 +45,30 @@ description: 当分析类回答需要配图时使用（趋势、占比、排名�
 
 ## 模板
 
-内联 SVG 条形图（最稳，无外链；轴名与单位、基线对齐、只写 viewBox 都在里面）：
+内联 SVG 条形图（最稳，无外链；轴名与单位、基线对齐、viewBox 按卡片实际宽度设计，都在里面）：
 
 ```html
 <div style="color:var(--vr-fg);font-size:var(--vr-font-body)">
-  <svg viewBox="0 0 360 196" width="100%" role="img" aria-label="各区域订单量（万单）">
-    <line x1="44" y1="150" x2="352" y2="150" stroke="var(--vr-line)"/>
-    <line x1="44" y1="24" x2="44" y2="150" stroke="var(--vr-line)"/>
-    <text x="44" y="16" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">万单</text>
-    <text x="198" y="190" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">区域</text>
-    <!-- 条形从 0 起：高度 = 数值 / 量程 × 绘图区高度；label 的 y 取条形顶 - 6（基线在条形上方） -->
-    <rect x="64" y="72" width="48" height="78" fill="var(--vr-series-1)"/>
-    <rect x="136" y="39" width="48" height="111" fill="var(--vr-series-1)"/>
-    <rect x="208" y="98" width="48" height="52" fill="var(--vr-series-1)"/>
-    <text x="88" y="66" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-fg)">62</text>
-    <text x="160" y="33" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-fg)">88</text>
-    <text x="232" y="92" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-fg)">41</text>
-    <text x="88" y="166" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">华东</text>
-    <text x="160" y="166" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">华南</text>
-    <text x="232" y="166" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">华北</text>
+  <svg viewBox="0 0 720 300" width="100%" role="img" aria-label="各区域订单量（万单）">
+    <line x1="56" y1="240" x2="700" y2="240" stroke="var(--vr-line)"/>
+    <line x1="56" y1="24" x2="56" y2="240" stroke="var(--vr-line)"/>
+    <text x="56" y="16" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">万单</text>
+    <text x="380" y="288" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">区域</text>
+    <!-- 条形从 0 起：高度 = 数值 / 量程 × 绘图区高度（216）；label 的 y 取条形顶 - 8（基线在条形上方） -->
+    <rect x="132" y="88" width="96" height="152" fill="var(--vr-series-1)"/>
+    <rect x="332" y="24" width="96" height="216" fill="var(--vr-series-1)"/>
+    <rect x="532" y="139" width="96" height="101" fill="var(--vr-series-1)"/>
+    <text x="180" y="80" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-fg)">62</text>
+    <text x="380" y="16" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-fg)">88</text>
+    <text x="580" y="131" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-fg)">41</text>
+    <text x="180" y="262" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">华东</text>
+    <text x="380" y="262" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">华南</text>
+    <text x="580" y="262" text-anchor="middle" style="font-size:var(--vr-font-caption);fill:var(--vr-muted)">华北</text>
   </svg>
 </div>
 ```
+
+**viewBox 的宽度决定缩放比**：卡片正文约 700px 宽，`width="100%"` 会把整块画布等比放大到卡片宽度。所以按 ~700 设计画布（`viewBox="0 0 720 300"`）；如果按 360 宽的小画布画完再撑满，字号和留白会一起被放大 ~2 倍（12px 变 25px、右边空出 30%），看着就像「图有边距」。
 
 ECharts（要交互才用，务必带兜底；`echarts` 由插件本地注入，不要写 `<script src>` 外链）：
 
