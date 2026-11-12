@@ -3,7 +3,7 @@
 All notable changes to `dsh-visual-reply`. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.2] — 2026-11-12
 
 ### Added
 
