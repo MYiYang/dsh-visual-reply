@@ -3,6 +3,22 @@
 All notable changes to `dsh-visual-reply`. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] — 2026-11-13
+
+### Fixed
+
+- Reopening a session after a DSH restart no longer leaves the figure inside the
+  tool group: the process-area card now yields to the turn-end copy by
+  `callId` instead of a render-order flag, so a cold history load converges to
+  "one figure at the end, one note in the process area" just like a live turn.
+- The turn-end projection is mounted through a soft `uiConversation` dependency
+  (`ctx.inject(['uiConversation'], …)`) instead of a one-shot `ctx.get` at
+  apply time. A late-arriving conversation UI used to disable the turn-end
+  figure for the whole process, which is why charts stayed in the tool card
+  after a restart.
+- The tool card still draws the full figure when the projection is genuinely
+  unavailable, so a failed mount never loses the chart.
+
 ## [0.2.2] — 2026-11-12
 
 ### Added

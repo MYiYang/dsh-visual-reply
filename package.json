@@ -1,6 +1,6 @@
 {
   "name": "dsh-visual-reply",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "Rich visual replies for DeepSeek Harness: a visual_render tool plus a sandboxed in-conversation figure (title, chart, provenance) and a bundled skill that decides when a figure earns its place.",
   "type": "module",
   "main": "index.js",

@@ -76,7 +76,8 @@ try {
     ['高度上限', 'maxHeight'],
     ['轮末投影', 'visualsDefinition'],
     ['轮末槽位', 'conversation.chat.turnTail'],
-    ['工具卡降级', 'tailReady'],
+    ['工具卡让位', 'tailRendered'],
+    ['会话 UI 软依赖', "ctx.inject(['uiConversation']"],
   ]
   const missing = marks.filter(([, token]) => !source.includes(token)).map(([name]) => name)
   clientOk = missing.length === 0
@@ -96,7 +97,8 @@ try {
   console.log('     boot-trail：尚未生成 —— host 侧这份新代码还没被加载过（要重启 DSH）')
 }
 
-// 5. 客户端诊断：noteDiag 会把痕迹写进 localStorage，Electron 落盘在 leveldb 里
+// 5. 客户端诊断：noteDiag 只写 window.__vrDiag 与 console.debug（不再落 localStorage）。
+//    这里仅把历史版本遗留的 vr-diag 记录打出来作参考，缺席不算失败。
 try {
   const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming')
   const lsDir = path.join(appData, '@deepseek-ai', 'dsh-desktop', 'Local Storage', 'leveldb')
@@ -108,9 +110,9 @@ try {
     const chunk = raw.slice(at, at + 160).replace(/[^ -~]/g, ' ').replace(/\s+/g, ' ').trim()
     if (chunk.length > trail.length) trail = chunk
   }
-  line('客户端诊断（localStorage）', trail !== '', trail === '' ? '尚无 vr-diag 记录' : trail)
-} catch (error) {
-  line('客户端诊断（localStorage）', false, `读不到 leveldb：${String(error).slice(0, 80)}`)
+  console.log(`     客户端诊断：${trail === '' ? '本版只写 window.__vrDiag 与控制台，请在 DevTools 里搜 [visual-reply]' : `旧版遗留记录 ${trail}`}`)
+} catch {
+  console.log('     客户端诊断：读不到 leveldb（非失败项；请直接看 DevTools 控制台）')
 }
 
 console.log('')

@@ -6,7 +6,9 @@ node_modules/
 *.tgz
 
 # Internal analysis & research drafts: keep local only (never published)
-docs/ANALYSIS.md
+docs/ANALYSIS*.md
+# Local screenshots at the repo root (真机截图只留本地)
+/*.png
 docs/PLAN-inline-and-local-echarts.md
 docs/RESEARCH-2026-11-design.md
 docs/CHANGES-2026-11.md

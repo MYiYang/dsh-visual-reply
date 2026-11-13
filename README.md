@@ -2,6 +2,8 @@
 
 Rich visual replies for DeepSeek Harness: the model calls one tool (`visual_render`) and the answer grows an inline figure — a 15px/500 conclusion title, an unframed interactive chart at body width, and a 12px source/method line. Hover the figure for the two primary actions (copy image / fullscreen); the rest live in `⋯` (copy data, download PNG/PDF/HTML, view source, collapse). Exports are composed here, not cropped from the iframe: the conclusion title, the figure and the provenance line are re-drawn on the theme surface at 2x, and a table/HTML fragment is rasterized instead of failing with “nothing to export”. Instead of a pasted HTML code block, a dead screenshot, or a tool card that looks like a debug panel.
 
+The figure sits after the answer and before the action row — outside the collapsed tool group — and that holds when a session is reopened after a DSH restart: each tool card yields to the turn-end copy by `callId`, never by render order.
+
 This is a reconstruction of the "text + figure" analysis replies seen in WorkBuddy / Doubao Work, redesigned in 2026-11 against how Claude, ChatGPT/Codex and the open-source ecosystem do it: a **skill** decides when a figure earns its place, a **client Figure** puts it into the conversation flow, and **data tools** keep the numbers honest.
 
 ## Layout

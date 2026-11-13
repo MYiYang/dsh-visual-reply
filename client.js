@@ -1748,8 +1748,75 @@ window.__ModuleLoader__.load({
       )
     }
 
-    /** 轮末图是否已挂上：挂上了工具卡就退成一行注脚，免得图演两遍。 */
-    let tailReady = false
+    // ── 轮末出图登记：工具卡按 callId 让位，不靠渲染先后 ────────────────
+    /**
+     * 已经在轮末真画出来的图（按 callId）。工具卡见到自己就退成一行注脚。
+     *
+     * 先前这里是一个「轮末渲染时置真」的全局布尔。工具卡在聊天流里排在
+     * 轮末节点之前，首帧必先看到 false 而画一张全图；之后只要没有再一次
+     * 重渲染，它就一直停在那里——重启 DSH 后冷加载正是这种情形，于是图
+     * 看起来「留在调用工具里」。改成按 callId 登记后，判定与渲染先后无关，
+     * 也天然按卡片隔离，不会串会话。
+     */
+    const tailRendered = new Set()
+    /** 登记变化时的订阅者：工具卡据此重渲染。 */
+    const tailListeners = new Set()
+    /** 登记上限：长会话里 callId 只增不减，留个上限免得无界增长。 */
+    const TAIL_RENDERED_LIMIT = 2048
+
+    /**
+     * 登记「这些图已在轮末画出来」，并通知订阅者。
+     * @param {any[]} cards - 本轮轮末的卡片。
+     * @returns {boolean} 是否新增了登记。
+     */
+    function markTailRendered(cards) {
+      if (!Array.isArray(cards)) return false
+      let changed = false
+      for (const card of cards) {
+        const callId = typeof card?.callId === 'string' ? card.callId : ''
+        if (callId === '' || tailRendered.has(callId)) continue
+        tailRendered.add(callId)
+        changed = true
+      }
+      while (tailRendered.size > TAIL_RENDERED_LIMIT) {
+        const oldest = tailRendered.values().next().value
+        if (oldest === undefined) break
+        tailRendered.delete(oldest)
+      }
+      if (changed) {
+        for (const listener of [...tailListeners]) {
+          try {
+            listener()
+          } catch {
+            /* 订阅者自己炸，不许连坐 */
+          }
+        }
+      }
+      return changed
+    }
+
+    /**
+     * 订阅「这张卡是否已在轮末画出来」。
+     * @param {string} callId - 工具调用 ID。
+     * @returns {boolean} 已登记为轮末出图。
+     */
+    function useTailRendered(callId) {
+      const id = typeof callId === 'string' ? callId : ''
+      const [rendered, setRendered] = React.useState(() => id !== '' && tailRendered.has(id))
+      React.useEffect(() => {
+        if (id === '') {
+          setRendered(false)
+          return undefined
+        }
+        setRendered(tailRendered.has(id))
+        const listener = () => setRendered(tailRendered.has(id))
+        tailListeners.add(listener)
+        return () => {
+          tailListeners.delete(listener)
+        }
+      }, [id])
+      return rendered
+    }
 
     /**
      * 工具卡：三态工具块 → 图 / 注脚 / 拒绝说明。
@@ -1774,6 +1841,8 @@ window.__ModuleLoader__.load({
         [card?.html, callId],
       )
       const [sourceShown, setSourceShown] = React.useState(false)
+      // 轮末已把这张图画出来时，过程区只留注脚；判定按 callId，不看渲染先后。
+      const renderedInTail = useTailRendered(callId)
 
       if (args === null) {
         return h(
@@ -1804,7 +1873,7 @@ window.__ModuleLoader__.load({
       }
 
       // 轮末已挂上图：过程区只留一行注脚。
-      if (tailReady) return h(CompactRow, { card, t, html })
+      if (renderedInTail) return h(CompactRow, { card, t, html })
 
       const notices = []
       if (read.isError) {
@@ -1900,10 +1969,18 @@ window.__ModuleLoader__.load({
     function VisualsTail(props) {
       const state = props?.turn?.data?.get?.(VISUALS_KIND)
       const cards = Array.isArray(state?.cards) ? state.cards : []
+      // 提交后登记：工具卡据此退成注脚。放 effect 里而不是渲染期，既不给
+      // React 留渲染副作用，也让「首帧画图、随后收敛」的顺序稳定可预期。
+      const renderedKey = cards
+        .map((card) => (typeof card?.callId === 'string' ? card.callId : ''))
+        .join('\u0000')
+      React.useEffect(() => {
+        if (renderedKey === '') return undefined
+        markTailRendered(cards)
+        noteDiag(`tail-render cards=${cards.length}`)
+        return undefined
+      }, [renderedKey])
       if (cards.length === 0) return null
-      // 只有轮末真画出图了，才让工具卡退成注脚——投影一旦失灵也不至于两头空。
-      tailReady = true
-      noteDiag(`tail-render cards=${cards.length}`)
       const language = typeof document !== 'undefined' && document.documentElement ? String(document.documentElement.lang || '').toLowerCase() : ''
       const dictionary = language.startsWith('en') ? en : zh
       const t = (key) => dictionary[key] ?? key
@@ -1957,10 +2034,17 @@ window.__ModuleLoader__.load({
               bound !== null ? (props) => h(VisualCard, { ...props, t: bound }) : VisualCard,
             ),
           )
-          // 轮末直显：会话 UI 装得上才挂；装不上就退回工具卡，绝不白屏。
-          const uiConversation = ctx.get?.('uiConversation')
-          if (uiConversation !== undefined && uiConversation !== null
-            && typeof uiConversation?.events?.register === 'function') {
+          // 轮末直显：会话 UI 可能晚于本插件就绪（客户端 bundle 载入次序随版本
+          // 会变）。旧写法在 apply 这一刻 `get` 一次，取不到就永远退回工具卡——
+          // 重启 DSH 后重进会话「图只在调用工具里」正是这个原因。改用软依赖
+          // 等它到齐再挂，挂不上再退回工具卡（图仍完整，不会白屏）。
+          const mountTail = (conversationCtx) => {
+            const uiConversation = conversationCtx?.uiConversation ?? conversationCtx?.get?.('uiConversation')
+            if (uiConversation === undefined || uiConversation === null
+              || typeof uiConversation?.events?.register !== 'function') {
+              noteDiag('no-uiConversation')
+              return
+            }
             try {
               uiConversation.events.register(visualsDefinition)
               ctx.slots.inject('conversation.chat.turnTail', () =>
@@ -1973,8 +2057,11 @@ window.__ModuleLoader__.load({
             } catch (error) {
               noteDiag(`tail-failed: ${String(error).slice(0, 160)}`)
             }
+          }
+          if (typeof ctx.inject === 'function') {
+            ctx.inject(['uiConversation'], (conversationCtx) => mountTail(conversationCtx ?? ctx))
           } else {
-            noteDiag('no-uiConversation')
+            mountTail(ctx)
           }
         } catch (error) {
           // 客户端半侧被错误吃掉时会一片空白，所以失败只报一次、不重抛。
@@ -2018,11 +2105,13 @@ window.__ModuleLoader__.load({
         cardOf,
         captionOf,
         runtimeSource,
-        /** 仅供单测把「轮末已挂上」这一档掰过来。 */
-        setTailReady: (value) => {
-          tailReady = value === true
+        /** 轮末出图登记：单测直接摆状态，不必真跑一遍 React。 */
+        markTailRendered,
+        useTailRendered,
+        tailRenderedIds: () => [...tailRendered],
+        resetTailRendered: () => {
+          tailRendered.clear()
         },
-        tailReady: () => tailReady,
       },
     }
   },

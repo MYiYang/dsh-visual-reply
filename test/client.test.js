@@ -303,7 +303,48 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   assert.equal(registered[1].definition.id, 'dsh-visual-reply')
 }
 
-// ── 3. cardOf：高度是上限、wide 放宽、口径字段归一化 ──────────────────────
+// ── 2b. 会话 UI 晚到：软依赖等到再挂，不抢先放弃 ─────────────────────────
+{
+  const registered = []
+  const injected = []
+  const projections = []
+  const pending = []
+  const ctx = {
+    effect(fn) {
+      fn()
+      return () => {}
+    },
+    locale: { register() {}, bind: () => (key) => `t:${key}` },
+    inject(deps, callback) {
+      pending.push({ deps, callback })
+    },
+    get() {
+      return undefined // 此刻 uiConversation 还没就绪
+    },
+    slots: {
+      inject(name, fn) {
+        injected.push(name)
+        fn()
+      },
+      register(definition, component) {
+        registered.push({ definition, component })
+        return () => {}
+      },
+    },
+  }
+  moduleExports.apply(ctx)
+  assert.deepEqual(pending[0]?.deps, ['uiConversation'], '应以软依赖等会话 UI')
+  assert.equal(projections.length, 0, '没到齐之前不许注册投影')
+  assert.deepEqual(injected, ['tool.call.toolview'], '先只有工具卡，图仍可见')
+  pending[0].callback({
+    uiConversation: { events: { register: (definition) => projections.push(definition) } },
+  })
+  assert.equal(projections.length, 1, '会话 UI 到了就补挂投影')
+  assert.equal(injected.includes('conversation.chat.turnTail'), true)
+  assert.equal(registered.at(-1).definition.name, 'conversation.chat.turnTail')
+}
+
+
 {
   const card = internals.cardOf({ title: ' 结论 ', html: '<svg></svg>', height: 99999 }, 'c', 1)
   assert.equal(card.title, '结论')
@@ -531,14 +572,23 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   assert.equal(textOf(withFigure).includes('receiptError'), true)
   assert.equal(textOf(withFigure).includes('value is not lossless JSON'), true)
 
-  internals.setTailReady(true)
+  internals.markTailRendered([{ callId: 'call-t' }])
+  fake.hardReset()
   const compact = internals.VisualCard({
     t,
     callId: 'call-t',
     block: { phase: 'start', argsRaw: JSON.stringify({ title: '轮末图', html: '<svg></svg>' }) },
   })
   assert.equal(findAll(compact, (n) => n?.type === internals.CompactRow).length, 1)
-  internals.setTailReady(false)
+  // 只登记了这一张：别的卡照旧画全图，轮末投影失灵时不至于丢图。
+  fake.hardReset()
+  const other = internals.VisualCard({
+    t,
+    callId: 'call-other',
+    block: { phase: 'start', argsRaw: JSON.stringify({ title: '过程区图', html: '<svg></svg>' }) },
+  })
+  assert.equal(findAll(other, (n) => n?.type === internals.Figure).length, 1)
+  internals.resetTailRendered()
 }
 
 // ── 11. 轮末注脚：标题可点、保留源码兜底 ─────────────────────────────
@@ -554,18 +604,47 @@ const sampleCard = (overrides = {}) => internals.cardOf({
   titleButton.props.onClick() // 测试环境没有 getElementById：不得抛
 }
 
-// ── 12. 轮末槽：有图才渲染、Figure 逐张画 ────────────────────────────────
+// ── 12. 轮末槽：有图才渲染、Figure 逐张画、提交后登记 ────────────────────
 {
   const card = sampleCard()
+  fake.hardReset()
+  internals.resetTailRendered()
   const tree = internals.VisualsTail({ turn: { data: { get: () => ({ cards: [card] }) } } })
   assert.equal(findAll(tree, (n) => n?.type === internals.Figure).length, 1)
   const id = findAll(tree, (n) => typeof n?.props?.id === 'string' && n.props.id.startsWith('vr-fig-'))[0]
   assert.equal(id.props.id, 'vr-fig-call-1')
+  // 渲染期不许写登记（React 渲染副作用）；提交后 effect 才登记。
+  assert.equal(internals.tailRenderedIds().length, 0)
+  runEffects()
+  assert.deepEqual(internals.tailRenderedIds(), ['call-1'])
   assert.equal(internals.VisualsTail({ turn: { data: { get: () => undefined } } }), null)
   assert.equal(internals.VisualsTail({}), null)
+  internals.resetTailRendered()
 }
 
-// ── 13. 事件投影：只收 visual_render、同 callId 去重、没有 Turn 数据不炸 ──
+// ── 12b. 冷加载顺序：工具卡先画图，轮末提交后自动收敛成注脚 ──────────────
+{
+  fake.hardReset()
+  internals.resetTailRendered()
+  const block = { phase: 'start', argsRaw: JSON.stringify({ title: '冷加载', html: '<svg></svg>' }) }
+  // 1) 首帧：过程区先渲染，此时还不知道轮末会出图。
+  const before = internals.VisualCard({ t, callId: 'call-cold', block })
+  assert.equal(findAll(before, (n) => n?.type === internals.Figure).length, 1)
+  runEffects() // 工具卡订阅「轮末已出图」的变化
+  // 2) 轮末随后提交：登记这一张，并通知订阅者。
+  fake.reset()
+  const coldCard = internals.cardOf({ title: '冷加载', html: '<svg></svg>' }, 'call-cold', 1)
+  internals.VisualsTail({ turn: { data: { get: () => ({ cards: [coldCard] }) } } })
+  runEffects()
+  assert.deepEqual(internals.tailRenderedIds(), ['call-cold'])
+  // 3) 工具卡重渲染：见到登记在案，退成注脚——不靠父级再渲染一次。
+  fake.reset()
+  const after = internals.VisualCard({ t, callId: 'call-cold', block })
+  assert.equal(findAll(after, (n) => n?.type === internals.CompactRow).length, 1)
+  internals.resetTailRendered()
+}
+
+
 {
   const def = internals.visualsDefinition
   assert.equal(def.kind, internals.VISUALS_KIND)
